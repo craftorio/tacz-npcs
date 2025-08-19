@@ -21,9 +21,11 @@ import com.tacz.guns.resource.pojo.data.gun.Bolt;
 import com.tacz.guns.resource.pojo.data.gun.BulletData;
 import com.tacz.guns.resource.pojo.data.gun.GunData;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.*;
 import net.minecraft.world.damagesource.DamageSource;
@@ -56,9 +58,7 @@ import net.tslat.smartbrainlib.api.core.behaviour.OneRandomBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.attack.AnimatableMeleeAttack;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.look.LookAtTarget;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.misc.Idle;
-import net.tslat.smartbrainlib.api.core.behaviour.custom.misc.Panic;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.AvoidEntity;
-import net.tslat.smartbrainlib.api.core.behaviour.custom.move.FollowEntity;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.MoveToWalkTarget;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.StrafeTarget;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.path.SetRandomWalkTarget;
@@ -154,21 +154,32 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
     }
 
     @Override
-    public void addAdditionalSaveData(@NotNull CompoundTag pCompound) {
-        super.addAdditionalSaveData(pCompound);
-        this.writeInventoryToTag(pCompound);
-        pCompound.putBoolean("dead", deadAsContainer);
-    }
-
-    @Override
     public void readAdditionalSaveData(@NotNull CompoundTag pCompound) {
         super.readAdditionalSaveData(pCompound);
-        resetSlots();
-        this.readInventoryFromTag(pCompound);
-        if(pCompound.contains("dead")) {
+        resetSlots(); // если нужно переинициализировать размеры/слушателей
+
+        // Загрузка инвентаря из тега "Items"
+        if (pCompound.contains("Items", Tag.TAG_LIST)) {
+            ListTag list = pCompound.getList("Items", Tag.TAG_COMPOUND);
+            inventory.clearContent();           // чтобы не дублировать
+            inventory.fromTag(list);            // SimpleContainer сам наполнит слоты
+        }
+
+        if (pCompound.contains("dead")) {
             this.deadAsContainer = pCompound.getBoolean("dead");
         }
     }
+
+    @Override
+    public void addAdditionalSaveData(@NotNull CompoundTag pCompound) {
+        super.addAdditionalSaveData(pCompound);
+
+        // Сохранение инвентаря в "Items"
+        pCompound.put("Items", inventory.createTag());
+
+        pCompound.putBoolean("dead", this.deadAsContainer);
+    }
+
     public void resetSlots() {
         for(EquipmentSlot slot : EquipmentSlot.values()) {
             this.setItemSlot(slot, ItemStack.EMPTY);
@@ -207,24 +218,57 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
 
     public abstract boolean allowInventory(Player player);
 
-    public BrainActivityGroup<? extends AbstractScavEntity> getCoreTasks() {
+    public BrainActivityGroup<AbstractScavEntity> getCoreTasks() {
         return BrainActivityGroup.coreTasks(new Behavior[]{
-                (new AvoidEntity<>()).noCloserThan(12).avoiding((entity) -> {
-            return entity == this.getTarget();
-        }),
-                new FollowEntity<AbstractScavEntity, AbstractScavEntity>().following((entity) -> entity.patrolLeader).stopFollowingWithin(8).speedMod(1.1f),
-                new TargetOrRetaliate<AbstractScavEntity>().isAllyIf((e, l) -> l.getType() == e.getType()).attackablePredicate(l -> l != null && this.hasLineOfSight(l)).alertAlliesWhen((m, e) -> e != null && m.hasLineOfSight(e)).runFor((e) -> 999).stopIf((e) -> e.getTarget() instanceof AbstractScavEntity scav && scav.deadAsContainer),
-                //new SetRetaliateTarget<>().isAllyIf((e, l) -> l.getType() == e.getType()),
-                new Panic<>().setRadius(16).speedMod((e) -> 1.1f).startCondition((e) -> this.getHealth() <= 10).whenStopping((e) -> panic = false).whenStarting( (e)-> panic = true).stopIf((e) -> this.getTarget() == null && !this.getTarget().hasLineOfSight(this)).runFor((e) -> 20),
-                (new LookAtTarget<AbstractScavEntity>()).runFor((entity) -> {
-            return RandomSource.create().nextInt(40, 300);
-        }).stopIf((e) -> e.getTarget() instanceof AbstractScavEntity scav && scav.deadAsContainer),
+                // держимся подальше от текущей цели
+                (new AvoidEntity<>())
+                        .noCloserThan(12)
+                        .avoiding(entity -> entity == this.getTarget()),
+
+                // следуем за лидером патруля (поле patrolLeader уже есть)
+                new net.tslat.smartbrainlib.api.core.behaviour.custom.move.FollowEntity<AbstractScavEntity, AbstractScavEntity>()
+                        .following(e -> e.patrolLeader)
+                        .stopFollowingWithin(8)
+                        .speedMod(1.1f),
+
+                // выбор/реталиэйт цели
+                new TargetOrRetaliate<AbstractScavEntity>()
+                        .isAllyIf((e, l) -> l.getType() == e.getType())
+                        .attackablePredicate(l -> l != null && this.hasLineOfSight(l))
+                        .alertAlliesWhen((m, e) -> e != null && m.hasLineOfSight(e))
+                        .runFor(e -> 999)
+                        .stopIf(e -> {
+                    var t = e.getTarget();
+                    return t instanceof AbstractScavEntity scav && scav.deadAsContainer;
+                }),
+
+                // ЗАМЕНА Panic<>: «паническое» отступление при низком HP
+                (new AvoidEntity<>())
+                        .noCloserThan(16)
+                        .avoiding(entity -> entity == this.getTarget())
+                        .speedModifier(1.1f)
+                        .startCondition(e -> this.getHealth() <= 10)
+                        .whenStarting(e -> this.panic = true)
+                        .whenStopping(e -> this.panic = false)
+                        .stopIf(e -> e.getTarget() == null || !e.getTarget().hasLineOfSight(e))
+                        .runFor(e -> 20),
+
+                (new LookAtTarget<AbstractScavEntity>())
+                        .runFor(entity -> RandomSource.create().nextInt(40, 300))
+                        .stopIf(e -> {
+                    var t = e.getTarget();
+                    return t instanceof AbstractScavEntity scav && scav.deadAsContainer;
+                }),
+
                 new OneRandomBehaviour<>(new ExtendedBehaviour[]{
-                new StrafeTarget<>().speedMod(0.75f).strafeDistance(24).stopStrafingWhen((entity) -> {
-                    return this.getTarget() == null || !this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get());
-                }).startCondition((e) -> this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
-                new MoveToWalkTarget<>()
-         }),
+                        new StrafeTarget<>()
+                                .speedMod(0.75f)
+                                .strafeDistance(24)
+                                .stopStrafingWhen(entity -> this.getTarget() == null
+                                        || !this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get()))
+                                .startCondition(e -> this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
+                        new MoveToWalkTarget<>()
+                }),
         });
     }
 
@@ -267,7 +311,7 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
                //        this.dropAllDeathLoot(pDamageSource);
                //        this.createWitherRose(livingentity);
                //    }
-               //    this.level().broadcastEntityEvent(this, (byte)3);
+               //    this.level.broadcastEntityEvent(this, (byte)3);
                //}
 
                 //this.setPose(Pose.DYING);
@@ -329,36 +373,48 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         }
     }
 
-    public BrainActivityGroup<? extends AbstractScavEntity> getIdleTasks() {
-        return BrainActivityGroup.idleTasks(new Behavior[]{new FirstApplicableBehaviour(new ExtendedBehaviour[]{
+    public BrainActivityGroup<AbstractScavEntity> getIdleTasks() {
+        return BrainActivityGroup.idleTasks(new FirstApplicableBehaviour(new ExtendedBehaviour[]{
                 new TargetOrRetaliate<>(),
                 new SetPlayerLookTarget<>(),
                 new SetRandomLookTarget<>()}),
                 new OneRandomBehaviour(new ExtendedBehaviour[]{(
                         new SetRandomWalkTarget<>()).speedModifier(1.0F),
-                        (new Idle<>()).runFor((entity) -> RandomSource.create().nextInt(30, 60))})});
+                        (new Idle<>()).runFor((entity) -> RandomSource.create().nextInt(30, 60))}));
     }
 
-    public BrainActivityGroup<? extends AbstractScavEntity> getFightTasks() {
+    @Override
+    public BrainActivityGroup<AbstractScavEntity> getFightTasks() {
         return BrainActivityGroup.fightTasks(new Behavior[]{
-                new InvalidateAttackTarget<>(),
-                (new SetWalkTargetToAttackTarget<>()).startCondition((entity) -> {
-            return !this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get());}),
-            new SetRetaliateTarget<>(),
-            new FirstApplicableBehaviour<>(new ExtendedBehaviour[]{(new TaczShootAttack<>(64).stopIf((e) -> e.getTarget() instanceof AbstractScavEntity scav && scav.deadAsContainer).startCondition((x$0) -> {
-            return this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get()) && !this.panic && this.collectiveShots <= this.getStateBurst();
-        })),
-                    (new AnimatableMeleeAttack<>(0)).whenStarting((entity) -> {
-            this.setAggressive(true);
-        }).whenStopping((entity) -> {
-            this.setAggressive(false);
-        })})});
+                new InvalidateAttackTarget<AbstractScavEntity>(),
+                new SetWalkTargetToAttackTarget<AbstractScavEntity>()
+                        .startCondition(e -> !e.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
+                new SetRetaliateTarget<AbstractScavEntity>(),
+
+                new FirstApplicableBehaviour<AbstractScavEntity>(
+                        new TaczShootAttack<AbstractScavEntity>(64)
+                                .stopIf(e -> {
+                                    LivingEntity t = e.getTarget();
+                                    return t instanceof AbstractScavEntity scav && scav.deadAsContainer;
+                                })
+                                .startCondition(e ->
+                                        e.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())
+                                                && !e.panic
+                                                && e.collectiveShots <= e.getStateBurst()
+                                ),
+
+                        new AnimatableMeleeAttack<AbstractScavEntity>(0)
+                                .whenStarting(e -> e.setAggressive(true))
+                                .whenStopping(e -> e.setAggressive(false))
+                )
+        });
     }
+
     public boolean isUsingGun() {
         return this.getMainHandItem().getItem() instanceof ModernKineticGunItem;
     }
     @Override
-    public abstract List<? extends ExtendedSensor<? extends AbstractScavEntity>> getSensors();
+    public abstract List<ExtendedSensor<AbstractScavEntity>> getSensors();
 
     public GunTabType heldGunType() {
         if(this.getMainHandItem().getItem() instanceof ModernKineticGunItem gun) {
@@ -455,8 +511,8 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
 
     @Override
     public void onAddedToWorld() {
-        if(this.deadAsContainer) {
-            if(this.getLastDamageSource() != null) {
+        if (this.deadAsContainer) {
+            if (this.getLastDamageSource() != null) {
                 dropCustomDeathLoot(this.getLastDamageSource(), 0, true);
             } else {
                 dropCustomDeathLoot(this.damageSources().generic(), 0, true);
@@ -464,7 +520,12 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
             this.discard();
         }
         super.onAddedToWorld();
-        if(this.isPatrolLeader) this.setCustomName(Component.literal(this.getCustomName().getString() + " | Patrol Leader"));
+        if (this.isPatrolLeader) {
+            Component name = this.getCustomName();
+            if (name != null) {
+                this.setCustomName(Component.literal(name.getString() + " | Patrol Leader"));
+            }
+        }
     }
 
     @Override
@@ -506,8 +567,8 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         if(inventory.hasAnyMatching((i) -> i.getItem() instanceof ArmorItem)) {
             for (int i = 0; i < inventory.getContainerSize() - 1; i++) {
                 if (inventory.getItem(i).getItem() instanceof ArmorItem item) {
-                    if(this.getItemBySlot(item.getEquipmentSlot()).isEmpty()) {
-                        this.setItemSlotAndDropWhenKilled(item.getEquipmentSlot(), inventory.getItem(i));
+                    if(this.getItemBySlot(item.getEquipmentSlot(inventory.getItem(i))).isEmpty()) {
+                        this.setItemSlotAndDropWhenKilled(item.getEquipmentSlot(inventory.getItem(i)), inventory.getItem(i));
                     }
                 }
             }

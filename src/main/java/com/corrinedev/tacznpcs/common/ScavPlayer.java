@@ -2,11 +2,9 @@ package com.corrinedev.tacznpcs.common;
 
 import com.corrinedev.tacznpcs.common.entity.AbstractScavEntity;
 import com.corrinedev.tacznpcs.common.entity.BanditEntity;
-import com.corrinedev.tacznpcs.common.entity.DutyEntity;
 import com.corrinedev.tacznpcs.common.entity.behavior.TaczShootAttack;
 import com.mojang.authlib.GameProfile;
 import com.tacz.guns.api.entity.IGunOperator;
-import com.tacz.guns.api.entity.ReloadState;
 import com.tacz.guns.api.entity.ShootResult;
 import com.tacz.guns.init.ModItems;
 import com.tacz.guns.item.ModernKineticGunItem;
@@ -28,7 +26,6 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.behavior.Behavior;
-import net.minecraft.world.entity.ai.targeting.TargetingConditions;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
@@ -39,13 +36,11 @@ import net.minecraft.world.phys.Vec3;
 import net.tslat.smartbrainlib.api.SmartBrainOwner;
 import net.tslat.smartbrainlib.api.core.BrainActivityGroup;
 import net.tslat.smartbrainlib.api.core.SmartBrainProvider;
-import net.tslat.smartbrainlib.api.core.behaviour.ExtendedBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.FirstApplicableBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.OneRandomBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.attack.AnimatableMeleeAttack;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.look.LookAtTarget;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.misc.Idle;
-import net.tslat.smartbrainlib.api.core.behaviour.custom.misc.Panic;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.AvoidEntity;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.MoveToWalkTarget;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.StrafeTarget;
@@ -69,14 +64,16 @@ public class ScavPlayer extends ServerPlayer {
     public ScavPlayer(ServerLevel pLevel, Vec3 pos, boolean loadFromPathfinder) {
         super(pLevel.getServer(), pLevel, new GameProfile(UUID.randomUUID(), ""));
         this.connection = new ServerGamePacketListenerImpl(pLevel.getServer(), new FakeClientConnection(PacketFlow.CLIENTBOUND), this);
-        var i = Math.random();
 
-        var gunItem = new ItemStack(ModItems.MODERN_KINETIC_GUN.get());
+        double i = Math.random();
+        ItemStack gunItem = new ItemStack(ModItems.MODERN_KINETIC_GUN.get());
         gunItem.getOrCreateTag().putString("GunId", i > 0.5 ? "tacz:m4a1" : "tacz:glock_17");
         this.setItemInHand(InteractionHand.MAIN_HAND, gunItem);
+
         this.setGameMode(GameType.SURVIVAL);
         this.setPos(pos);
-        if(!loadFromPathfinder) {
+
+        if (!loadFromPathfinder) {
             this.pathfinder = new InternalPathfinder(pLevel, this);
             pathfinder.setPos(pos);
             pLevel.addFreshEntity(this.pathfinder);
@@ -97,42 +94,45 @@ public class ScavPlayer extends ServerPlayer {
     @Override
     public void tick() {
         super.baseTick();
-        var op = IGunOperator.fromLivingEntity(this);
-        //this.pathfinder.tick();
-        if(Math.abs(this.getDeltaMovement().x) + Math.abs(this.getDeltaMovement().z) > 0.15) {
+
+        IGunOperator op = IGunOperator.fromLivingEntity(this);
+
+        // Sprint state by velocity
+        if (Math.abs(this.getDeltaMovement().x) + Math.abs(this.getDeltaMovement().z) > 0.15) {
             this.setSprinting(true);
         } else {
             this.setSprinting(false);
         }
+
         updateUsingItem(this.getMainHandItem());
-        var entity = this.level().getNearestPlayer(this, 32);
-        if(
-                !op.getDataHolder().reloadStateType.isReloading()
-                        && !op.getSynIsBolting()
-                        && this.getMainHandItem().getItem() instanceof ModernKineticGunItem gun
-                        && entity != null
-        ) {
-                op.aim(true);
-                var result = op.shoot(() -> this.getViewXRot(1f) + (random.nextInt(-15, 15)), () -> this.getViewYRot(1f) + random.nextInt(-15, 15));
-                System.out.println(result);
-                if (result == ShootResult.NEED_BOLT) op.bolt();
-                //if (result == ShootResult.IS_RELOADING) op.cancelReload();
-                if (result == ShootResult.NOT_DRAW) op.draw(this::getMainHandItem);
+
+        Player entity = this.level().getNearestPlayer(this, 32);
+        if (!op.getDataHolder().reloadStateType.isReloading()
+                && !op.getSynIsBolting()
+                && this.getMainHandItem().getItem() instanceof ModernKineticGunItem
+                && entity != null) {
+            op.aim(true);
+            ShootResult result = op.shoot(() -> this.getViewXRot(1f) + (random.nextInt(-15, 15)),
+                    () -> this.getViewYRot(1f) + random.nextInt(-15, 15));
+            System.out.println(result);
+            if (result == ShootResult.NEED_BOLT) op.bolt();
+            if (result == ShootResult.NOT_DRAW) op.draw(this::getMainHandItem);
         } else {
             op.aim(false);
         }
-        if(this.getMainHandItem().getItem() instanceof ModernKineticGunItem gun) {
-            if(!op.getDataHolder().reloadStateType.isReloading() && gun.canReload(this, this.getMainHandItem())) {
+
+        if (this.getMainHandItem().getItem() instanceof ModernKineticGunItem gun) {
+            if (!op.getDataHolder().reloadStateType.isReloading() && gun.canReload(this, this.getMainHandItem())) {
                 op.reload();
             }
         }
+
         if (!this.level().isClientSide) {
             int i = this.getArrowCount();
             if (i > 0) {
                 if (this.removeArrowTime <= 0) {
                     this.removeArrowTime = 20 * (30 - i);
                 }
-
                 --this.removeArrowTime;
                 if (this.removeArrowTime <= 0) {
                     this.setArrowCount(i - 1);
@@ -144,7 +144,6 @@ public class ScavPlayer extends ServerPlayer {
                 if (this.removeStingerTime <= 0) {
                     this.removeStingerTime = 20 * (30 - j);
                 }
-
                 --this.removeStingerTime;
                 if (this.removeStingerTime <= 0) {
                     this.setStingerCount(j - 1);
@@ -155,18 +154,18 @@ public class ScavPlayer extends ServerPlayer {
             if (this.tickCount % 20 == 0) {
                 this.getCombatTracker().recheckStatus();
             }
-
         }
 
         if (!this.isRemoved()) {
             this.aiStep();
             this.invulnerableTime--;
         } else {
-            if(!this.level().isClientSide)
+            if (!this.level().isClientSide)
                 this.getServer().getPlayerList().remove(this);
         }
-        for(ItemEntity item : this.level().getEntitiesOfClass(ItemEntity.class, this.getBoundingBox().inflate(2.0D))) {
-            if(item.getItem().getItem() instanceof ModernKineticGunItem) {
+
+        for (ItemEntity item : this.level().getEntitiesOfClass(ItemEntity.class, this.getBoundingBox().inflate(2.0D))) {
+            if (item.getItem().getItem() instanceof ModernKineticGunItem) {
                 this.setItemInHand(InteractionHand.MAIN_HAND, item.getItem());
                 item.discard();
             }
@@ -205,50 +204,20 @@ public class ScavPlayer extends ServerPlayer {
         this.level().getProfiler().pop();
         this.level().getProfiler().push("rangeChecks");
 
-        while(this.getYRot() - this.yRotO < -180.0F) {
-            this.yRotO -= 360.0F;
-        }
-
-        while(this.getYRot() - this.yRotO >= 180.0F) {
-            this.yRotO += 360.0F;
-        }
-
-        while(this.yBodyRot - this.yBodyRotO < -180.0F) {
-            this.yBodyRotO -= 360.0F;
-        }
-
-        while(this.yBodyRot - this.yBodyRotO >= 180.0F) {
-            this.yBodyRotO += 360.0F;
-        }
-
-        while(this.getXRot() - this.xRotO < -180.0F) {
-            this.xRotO -= 360.0F;
-        }
-
-        while(this.getXRot() - this.xRotO >= 180.0F) {
-            this.xRotO += 360.0F;
-        }
-
-        while(this.yHeadRot - this.yHeadRotO < -180.0F) {
-            this.yHeadRotO -= 360.0F;
-        }
-
-        while(this.yHeadRot - this.yHeadRotO >= 180.0F) {
-            this.yHeadRotO += 360.0F;
-        }
+        while (this.getYRot() - this.yRotO < -180.0F) this.yRotO -= 360.0F;
+        while (this.getYRot() - this.yRotO >= 180.0F) this.yRotO += 360.0F;
+        while (this.yBodyRot - this.yBodyRotO < -180.0F) this.yBodyRotO -= 360.0F;
+        while (this.yBodyRot - this.yBodyRotO >= 180.0F) this.yBodyRotO += 360.0F;
+        while (this.getXRot() - this.xRotO < -180.0F) this.xRotO -= 360.0F;
+        while (this.getXRot() - this.xRotO >= 180.0F) this.xRotO += 360.0F;
+        while (this.yHeadRot - this.yHeadRotO < -180.0F) this.yHeadRotO -= 360.0F;
+        while (this.yHeadRot - this.yHeadRotO >= 180.0F) this.yHeadRotO += 360.0F;
 
         this.level().getProfiler().pop();
         this.animStep += f2;
-        if (this.isFallFlying()) {
-            ++this.fallFlyTicks;
-        } else {
-            this.fallFlyTicks = 0;
-        }
+        if (this.isFallFlying()) ++this.fallFlyTicks; else this.fallFlyTicks = 0;
 
-        if (this.isSleeping()) {
-            this.setXRot(0.0F);
-        }
-
+        if (this.isSleeping()) this.setXRot(0.0F);
     }
 
     @Override
@@ -408,7 +377,10 @@ public class ScavPlayer extends ServerPlayer {
     }
 
     public static class InternalPathfinder extends PathfinderMob implements SmartBrainOwner<InternalPathfinder> {
-        public static final EntityType<InternalPathfinder> TYPE = EntityType.Builder.of((EntityType.EntityFactory<InternalPathfinder>) InternalPathfinder::new, MobCategory.MISC).sized(0.6f, 1.8f).noSummon().build("internal_pathfinder");
+        public static final EntityType<InternalPathfinder> TYPE =
+                EntityType.Builder.of((EntityType.EntityFactory<InternalPathfinder>) InternalPathfinder::new, MobCategory.MISC)
+                        .sized(0.6f, 1.8f).noSummon().build("internal_pathfinder");
+
         public final ScavPlayer attachedEntity;
         public final IGunOperator user;
         public boolean firing;
@@ -422,7 +394,7 @@ public class ScavPlayer extends ServerPlayer {
             attachedEntity = null;
             user = null;
         }
-        
+
         public InternalPathfinder(Level pLevel, ScavPlayer pEntity) {
             super(TYPE, pLevel);
             attachedEntity = pEntity;
@@ -434,22 +406,18 @@ public class ScavPlayer extends ServerPlayer {
             tickBrain(this);
         }
 
-        @Override
-        public boolean canBeHitByProjectile() {
-            return false;
-        }
-
         public void tick() {
-            if(this.attachedEntity == null) this.discard();
-            if(this.attachedEntity == null) return;
-            if(this.attachedEntity.deathTime >= 20) this.discard();
-            if(this.attachedEntity.isDeadOrDying()) return;
+            if (this.attachedEntity == null) this.discard();
+            if (this.attachedEntity == null) return;
+            if (this.attachedEntity.deathTime >= 20) this.discard();
+            if (this.attachedEntity.isDeadOrDying()) return;
+
             super.tick();
+
             attachedEntity.moveTo(this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
             attachedEntity.setPose(this.getPose());
             attachedEntity.setYHeadRot(this.getYHeadRot());
             this.setHealth(attachedEntity.getHealth());
-            //attachedEntity.lerpTo(this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot(), 0, false);
         }
 
         protected Brain.@NotNull Provider<?> brainProvider() {
@@ -467,61 +435,96 @@ public class ScavPlayer extends ServerPlayer {
             return false;
         }
 
-        //Prevent rendering
-        public boolean shouldRender(double pX, double pY, double pZ) {return false;}
-        public boolean shouldRenderAtSqrDistance(double pDistance) {return false;}
+        // Prevent rendering
+        public boolean shouldRender(double pX, double pY, double pZ) { return false; }
+        public boolean shouldRenderAtSqrDistance(double pDistance) { return false; }
 
         @Override
-        public List<? extends ExtendedSensor<? extends InternalPathfinder>> getSensors() {
+        public List<ExtendedSensor<InternalPathfinder>> getSensors() {
             return ObjectArrayList.of(
                     new NearbyPlayersSensor<InternalPathfinder>().setPredicate((p, e) -> e.attackers.contains(p)),
                     new HurtBySensor<>(),
                     new NearbyLivingEntitySensor<InternalPathfinder>()
-                            .setPredicate((target, entity) -> target == this.currentAngerTarget ||
-                                    (target instanceof BanditEntity bandit && !bandit.deadAsContainer) ||
-                                    (target instanceof Monster) ||
-                                    target.getType().getCategory() == MobCategory.MONSTER));
+                            .setPredicate((target, entity) ->
+                                    target == this.currentAngerTarget ||
+                                            (target instanceof BanditEntity bandit && !bandit.deadAsContainer) ||
+                                            (target instanceof Monster) ||
+                                            target.getType().getCategory() == MobCategory.MONSTER));
         }
 
         @Override
-        public BrainActivityGroup<? extends InternalPathfinder> getCoreTasks() {
+        public BrainActivityGroup<InternalPathfinder> getCoreTasks() {
             return BrainActivityGroup.coreTasks(new Behavior[]{
-                    (new AvoidEntity<>()).noCloserThan(12).avoiding((entity) -> {
-                        return entity == this.getTarget();
-                    }),
-                    new TargetOrRetaliate<InternalPathfinder>().isAllyIf((e, l) -> l instanceof InternalPathfinder).attackablePredicate(l -> l != null && this.hasLineOfSight(l)).alertAlliesWhen((m, e) -> e != null && m.hasLineOfSight(e)).runFor((e) -> 999),
-                    //new SetRetaliateTarget<>().isAllyIf((e, l) -> l.getType() == e.getType()),
-                    new Panic<>().setRadius(16).speedMod((e) -> 1.1f).startCondition((e) -> this.getHealth() <= 10).whenStopping((e) -> panic = false).whenStarting( (e)-> panic = true).stopIf((e) -> this.getTarget() == null || !this.getTarget().hasLineOfSight(this)).runFor((e) -> 20),
-                    (new LookAtTarget<>()).runFor((entity) -> {
-                        return RandomSource.create().nextInt(40, 300);
-                    }), (new StrafeTarget<>()).speedMod(0.75f).strafeDistance(24).stopStrafingWhen((entity) -> {
-                return this.getTarget() == null || !attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get());
-            }).startCondition((e) -> attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())), new MoveToWalkTarget<>()});
+                    // keep distance from current target
+                    (new AvoidEntity<>()).noCloserThan(12).avoiding(entity -> entity == this.getTarget()),
+
+                    // pick/retaliate targets
+                    new TargetOrRetaliate<InternalPathfinder>()
+                            .isAllyIf((e, l) -> l instanceof InternalPathfinder)
+                            .attackablePredicate(l -> l != null && this.hasLineOfSight(l))
+                            .alertAlliesWhen((m, e) -> e != null && m.hasLineOfSight(e))
+                            .runFor(e -> 999),
+
+                    // Panic replacement: AvoidEntity with start/stop conditions
+                    (new AvoidEntity<>())
+                            .noCloserThan(16)
+                            .avoiding(entity -> entity == this.getTarget())
+                            .speedModifier(1.1f)
+                            .startCondition(e -> this.getHealth() <= 10)
+                            .whenStarting(e -> this.panic = true)
+                            .whenStopping(e -> this.panic = false)
+                            .stopIf(e -> this.getTarget() == null || !this.getTarget().hasLineOfSight(this))
+                            .runFor(e -> 20),
+
+                    (new LookAtTarget<>()).runFor(entity -> RandomSource.create().nextInt(40, 300)),
+
+                    (new StrafeTarget<>()).speedMod(0.75f).strafeDistance(24)
+                            .stopStrafingWhen(entity -> this.getTarget() == null || !attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get()))
+                            .startCondition(e -> attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
+
+                    new MoveToWalkTarget<>()
+            });
         }
 
-        public BrainActivityGroup<? extends InternalPathfinder> getIdleTasks() {
-            return BrainActivityGroup.idleTasks(new Behavior[]{new FirstApplicableBehaviour(new TargetOrRetaliate<>(),
-                    new SetPlayerLookTarget<>(),
-                    new SetRandomLookTarget<>()),
-                    new OneRandomBehaviour((
-                            new SetRandomWalkTarget<>()).speedModifier(1.0F),
-                            (new Idle<>()).runFor((entity) -> RandomSource.create().nextInt(30, 60)))});
+        public BrainActivityGroup<InternalPathfinder> getIdleTasks() {
+            return BrainActivityGroup.idleTasks(new Behavior[]{
+                    new FirstApplicableBehaviour(
+                            new TargetOrRetaliate<>(),
+                            new SetPlayerLookTarget<>(),
+                            new SetRandomLookTarget<>()),
+                    new OneRandomBehaviour(
+                            (new SetRandomWalkTarget<>()).speedModifier(1.0F),
+                            (new Idle<>()).runFor(entity -> RandomSource.create().nextInt(30, 60)))
+            });
         }
 
-        public BrainActivityGroup<? extends InternalPathfinder> getFightTasks() {
+        @Override
+        public BrainActivityGroup<InternalPathfinder> getFightTasks() {
             return BrainActivityGroup.fightTasks(new Behavior[]{
-                    new InvalidateAttackTarget<>(),
-                    (new SetWalkTargetToAttackTarget<>()).startCondition((entity) -> {
-                        return !attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get());}),
-                    new SetRetaliateTarget<>(),
-                    new FirstApplicableBehaviour((new TaczShootAttack<>(64).stopIf((e) -> e.getTarget() instanceof AbstractScavEntity scav && scav.deadAsContainer).startCondition((x$0) -> {
-                        return attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get()) && !this.panic && this.collectiveShots <= 5;
-                    })),
-                            (new AnimatableMeleeAttack<InternalPathfinder>(0)).whenStarting((entity) -> {
-                                this.setAggressive(true);
-                            }).whenStopping((entity) -> {
-                                this.setAggressive(false);
-                            }))});
+                    new InvalidateAttackTarget<InternalPathfinder>(),
+
+                    new SetWalkTargetToAttackTarget<InternalPathfinder>()
+                            .startCondition(e -> !attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
+
+                    new SetRetaliateTarget<InternalPathfinder>(),
+
+                    new FirstApplicableBehaviour<InternalPathfinder>(
+                            new TaczShootAttack<InternalPathfinder>(64)
+                                    .stopIf(e -> {
+                                        LivingEntity t = e.getTarget();
+                                        return t instanceof AbstractScavEntity scav && scav.deadAsContainer;
+                                    })
+                                    .startCondition(e ->
+                                            attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())
+                                                    && !this.panic
+                                                    && this.collectiveShots <= 5
+                                    ),
+                            new AnimatableMeleeAttack<InternalPathfinder>(0)
+                                    .whenStarting(e -> this.setAggressive(true))
+                                    .whenStopping(e -> this.setAggressive(false))
+                    )
+            });
         }
+
     }
 }
