@@ -2,10 +2,8 @@ package com.corrinedev.tacznpcs.common.entity;
 
 import com.corrinedev.tacznpcs.NPCS;
 import com.corrinedev.tacznpcs.common.Patrol;
-import com.mojang.realmsclient.util.WorldGenerationInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
@@ -42,7 +40,7 @@ public abstract class PatrolSpawnerEntity<E extends AbstractScavEntity> extends 
         patrol.patrolMembers.forEach((member) -> {
             BlockPos offsetPos = this.blockPosition().offset( random.nextInt(-6, 6), 0 , random.nextInt(-6, 6) );
             // Ensure the entity is spawned on top of a solid block
-                while(level().getBlockState(offsetPos).isCollisionShapeFullBlock(level(), offsetPos)) {
+                while(this.level().getBlockState(offsetPos).isCollisionShapeFullBlock(this.level(), offsetPos)) {
                     offsetPos = offsetPos.above();
                     if(offsetPos.getY() > 255) {
                         offsetPos = this.blockPosition();
@@ -54,7 +52,7 @@ public abstract class PatrolSpawnerEntity<E extends AbstractScavEntity> extends 
             this.level().addFreshEntity(member);
         });
         BlockPos newPos = this.blockPosition();
-        while(level().getBlockState(this.blockPosition()).isCollisionShapeFullBlock(level(), this.blockPosition())) {
+        while(this.level().getBlockState(this.blockPosition()).isCollisionShapeFullBlock(this.level(), this.blockPosition())) {
             newPos = this.blockPosition().above();
             if(newPos.getY() > 255) {
                 newPos = this.blockPosition();

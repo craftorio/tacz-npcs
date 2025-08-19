@@ -2,81 +2,85 @@ package com.corrinedev.tacznpcs.common.entity.behavior;
 
 import com.corrinedev.tacznpcs.common.ScavPlayer;
 import com.corrinedev.tacznpcs.common.entity.AbstractScavEntity;
-import com.corrinedev.tacznpcs.common.entity.BanditEntity;
 import com.mojang.datafixers.util.Pair;
+import com.tacz.guns.api.entity.IGunOperator;
 import com.tacz.guns.api.entity.ShootResult;
 import com.tacz.guns.item.ModernKineticGunItem;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.MemoryStatus;
+import net.tslat.smartbrainlib.api.SmartBrainOwner;
 import net.tslat.smartbrainlib.api.core.behaviour.ExtendedBehaviour;
 import net.tslat.smartbrainlib.util.BrainUtils;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-public class TaczShootAttack<E extends AbstractScavEntity> extends ExtendedBehaviour<E> {
+public class TaczShootAttack<E extends LivingEntity & SmartBrainOwner<E>> extends ExtendedBehaviour<E> {
     private static final List<Pair<MemoryModuleType<?>, MemoryStatus>> MEMORY_REQUIREMENTS;
     protected float attackRadius;
     protected @Nullable LivingEntity target = null;
 
-    public List<Pair<MemoryModuleType<?>, MemoryStatus>> getMemoryRequirements() {
-        return MEMORY_REQUIREMENTS;
+    static {
+        MEMORY_REQUIREMENTS = ObjectArrayList.of(
+                Pair.of(MemoryModuleType.ATTACK_TARGET, MemoryStatus.VALUE_PRESENT),
+                Pair.of(MemoryModuleType.ATTACK_COOLING_DOWN, MemoryStatus.VALUE_ABSENT)
+        );
     }
 
     public TaczShootAttack() {
-        super();
-        this.attackRadius = 32;
-        //this.attackIntervalSupplier = (entity) -> RandomSource.create().nextInt(0,2);
+        this(32);
     }
+
     public TaczShootAttack(int attackRadius) {
         super();
         this.attackRadius = attackRadius;
-        //this.attackIntervalSupplier = (entity) -> RandomSource.create().nextInt(0,2);;
-    }
-    @Override
-    protected boolean checkExtraStartConditions(ServerLevel level, E entity) {
-        this.target = BrainUtils.getTargetOfEntity(entity);
-        return BrainUtils.canSee(entity, this.target);
     }
 
     @Override
-    protected void start(E entity) {
-            if (this.target != null && entity.getTarget() != null && BehaviorUtils.entityIsVisible(entity.getBrain(), entity.getTarget())) {
-                entity.lookAt(EntityAnchorArgument.Anchor.EYES, entity.getTarget().getPosition(1f));
-                BehaviorUtils.lookAtEntity(entity, entity.getTarget());
-                if (entity.hasLineOfSight(entity.getTarget())) {
-                    if (entity.getMainHandItem().getItem() instanceof ModernKineticGunItem) {
-                        entity.aim(true);
-                        ShootResult result = entity.shoot(() -> entity.getViewXRot(1f), () -> entity.getViewYRot(1f));
-                        if (result == ShootResult.SUCCESS) {
-                            entity.firing = true;
-                            entity.collectiveShots++;
-                        } else if (result == ShootResult.NEED_BOLT) {
-                            entity.bolt();
-                        }
-                        BrainUtils.setForgettableMemory(entity, MemoryModuleType.ATTACK_COOLING_DOWN, true, 1);
+    protected boolean checkExtraStartConditions(ServerLevel level, E owner) {
+        this.target = BrainUtils.getTargetOfEntity(owner);
+        return this.target != null && BrainUtils.canSee(owner, this.target);
+    }
+
+    @Override
+    protected void start(E owner) {
+        LivingEntity tgt = BrainUtils.getTargetOfEntity(owner);
+        if (tgt == null) return;
+
+        if (BehaviorUtils.entityIsVisible(owner.getBrain(), tgt) && owner.hasLineOfSight(tgt)) {
+            owner.lookAt(EntityAnchorArgument.Anchor.EYES, tgt.getPosition(1f));
+            BehaviorUtils.lookAtEntity(owner, tgt);
+
+            if (owner.getMainHandItem().getItem() instanceof ModernKineticGunItem) {
+                IGunOperator op = IGunOperator.fromLivingEntity(owner);
+
+                op.aim(true);
+                ShootResult result = op.shoot(() -> owner.getViewXRot(1f), () -> owner.getViewYRot(1f));
+
+                if (result == ShootResult.NEED_BOLT) {
+                    op.bolt();
+                } else if (result == ShootResult.SUCCESS) {
+                    if (owner instanceof AbstractScavEntity a) {
+                        a.firing = true;
+                        a.collectiveShots++;
+                    } else if (owner instanceof ScavPlayer.InternalPathfinder pf) {
+                        pf.firing = true;
+                        pf.collectiveShots++;
                     }
                 }
+
+                BrainUtils.setForgettableMemory(owner, MemoryModuleType.ATTACK_COOLING_DOWN, true, 1);
             }
         }
-
-    @Override
-    protected void stop(E entity) {
-        //super.stop(entity);
     }
 
     @Override
-    protected void tick(E entity) {
-        super.tick(entity);
-    }
-
-    static {
-        MEMORY_REQUIREMENTS = ObjectArrayList.of(new Pair[]{Pair.of(MemoryModuleType.ATTACK_TARGET, MemoryStatus.VALUE_PRESENT), Pair.of(MemoryModuleType.ATTACK_COOLING_DOWN, MemoryStatus.VALUE_ABSENT)});
+    public List<Pair<MemoryModuleType<?>, MemoryStatus>> getMemoryRequirements() {
+        return MEMORY_REQUIREMENTS;
     }
 }

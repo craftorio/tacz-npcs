@@ -2,9 +2,6 @@ package com.corrinedev.tacznpcs.common.entity;
 
 import com.corrinedev.tacznpcs.Config;
 import com.tacz.guns.item.ModernKineticGunItem;
-import dev.kosmx.playerAnim.api.layered.AnimationStack;
-import dev.kosmx.playerAnim.api.layered.IAnimation;
-import dev.kosmx.playerAnim.impl.animation.AnimationApplier;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -15,6 +12,7 @@ import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.animal.Wolf;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -26,8 +24,6 @@ import net.tslat.smartbrainlib.api.core.sensor.ExtendedSensor;
 import net.tslat.smartbrainlib.api.core.sensor.vanilla.HurtBySensor;
 import net.tslat.smartbrainlib.api.core.sensor.vanilla.NearbyLivingEntitySensor;
 import net.tslat.smartbrainlib.api.core.sensor.vanilla.NearbyPlayersSensor;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -93,16 +89,21 @@ public class BanditEntity extends AbstractScavEntity {
         return super.hurt(pSource, pAmount);
     }
     @Override
-    public List<? extends ExtendedSensor<? extends AbstractScavEntity>> getSensors() {
+    public List<ExtendedSensor<AbstractScavEntity>> getSensors() {
         return ObjectArrayList.of(
                 new NearbyPlayersSensor<>(),
                 new HurtBySensor<>(),
                 new NearbyLivingEntitySensor<AbstractScavEntity>()
                         .setPredicate((target, entity) ->
+                                !(target instanceof BanditEntity) && (
                                 target instanceof Player ||
                                         target instanceof IronGolem ||
                                         (target instanceof DutyEntity duty && !duty.deadAsContainer)||
                                         target instanceof Wolf ||
-                                        (target instanceof AbstractVillager)));
+                                        (target instanceof AbstractVillager) ||
+                                        (target instanceof Monster ) ||
+                                                target.getType().getCategory() == MobCategory.MONSTER)
+                        )
+        );
     }
 }
