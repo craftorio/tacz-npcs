@@ -5,7 +5,7 @@
   "compatibilityLevel": "JAVA_8",
   "refmap": "tacz_npc.refmap.json",
   "mixins": [
-    "ConnectionMixin",
+    "ConnectionAccessor",
     "FakePlayerJoinMixin"
   ],
   "client": [

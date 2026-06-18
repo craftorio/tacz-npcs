@@ -1,5 +1,6 @@
 package com.corrinedev.tacznpcs.common;
 
+import com.corrinedev.tacznpcs.mixin.ConnectionAccessor;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.network.Connection;
@@ -12,7 +13,7 @@ public class FakeClientConnection extends Connection
     public FakeClientConnection(PacketFlow p)
     {
         super(p);
-        ((ClientConnectionInterface)this).setChannel(new EmbeddedChannel());
+        ((ConnectionAccessor) this).setChannel(new EmbeddedChannel());
     }
 
     @Override
