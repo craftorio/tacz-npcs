@@ -2,6 +2,7 @@ package com.corrinedev.tacznpcs.common.entity;
 
 import com.corrinedev.tacznpcs.Config;
 import com.corrinedev.tacznpcs.common.entity.behavior.TaczShootAttack;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import com.corrinedev.tacznpcs.common.entity.inventory.ScavInventory;
 import com.tacz.guns.api.TimelessAPI;
 import com.tacz.guns.api.entity.IGunOperator;
@@ -26,8 +27,12 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.*;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParamSet;
+import net.minecraftforge.fml.ModList;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.Brain;
@@ -115,6 +120,30 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
 
         this.inventory.addItem(patrolLeaderBanner);
 
+    }
+
+    protected void applySpawnLoadout(Level level, ResourceLocation lootTable) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        var server = serverLevel.getServer();
+        if (server == null) {
+            return;
+        }
+        ObjectArrayList<ItemStack> stacks = server.getLootData().getLootTable(lootTable)
+                .getRandomItems(new LootParams.Builder(server.overworld())
+                        .create(LootContextParamSet.builder().build()));
+        stacks.forEach((stack) -> {
+            if (stack.getItem() instanceof ModernKineticGunItem) {
+                if (ModList.get().isLoaded("gundurability")) {
+                    stack.getOrCreateTag().putInt("Durability", RandomSource.create().nextInt(Config.DURABILITYFROM.get(), Config.DURABILITYTO.get()));
+                }
+            }
+            if (stack.getMaxDamage() != 0) {
+                stack.setDamageValue(RandomSource.create().nextInt((int) stack.getMaxDamage() / 2, stack.getMaxDamage()));
+            }
+            inventory.addItem(stack);
+        });
     }
 
     public static AttributeSupplier.@NotNull Builder createLivingAttributes() {
