@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.*;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -29,7 +30,7 @@ public final class MonsterReplacement {
                 () -> EntityTypeRegistry.DUTY.get());
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onEntityJoin(EntityJoinLevelEvent event) {
         // работаем только на сервере
         if (event.getLevel().isClientSide()) return;
@@ -89,6 +90,10 @@ public final class MonsterReplacement {
 
         // помечаем, чтобы наш обработчик не трогал нашу же замену
         replacement.getPersistentData().putBoolean(NBT_FLAG, true);
+
+        if (replacement instanceof Mob mob) {
+            mob.setPersistenceRequired();
+        }
 
         level.addFreshEntity(replacement);
     }
