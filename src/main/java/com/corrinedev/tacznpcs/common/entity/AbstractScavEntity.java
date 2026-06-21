@@ -595,9 +595,11 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         }
         if(inventory.hasAnyMatching((i) -> i.getItem() instanceof ArmorItem)) {
             for (int i = 0; i < inventory.getContainerSize() - 1; i++) {
-                if (inventory.getItem(i).getItem() instanceof ArmorItem item) {
-                    if(this.getItemBySlot(item.getEquipmentSlot(inventory.getItem(i))).isEmpty()) {
-                        this.setItemSlotAndDropWhenKilled(item.getEquipmentSlot(inventory.getItem(i)), inventory.getItem(i));
+                ItemStack stack = inventory.getItem(i);
+                if (stack.getItem() instanceof ArmorItem item) {
+                    EquipmentSlot slot = item.getEquipmentSlot(stack);
+                    if (slot != null && this.getItemBySlot(slot).isEmpty()) {
+                        this.setItemSlotAndDropWhenKilled(slot, stack);
                     }
                 }
             }
