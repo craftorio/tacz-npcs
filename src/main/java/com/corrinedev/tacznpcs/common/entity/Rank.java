@@ -16,4 +16,8 @@ public enum Rank {
     public String toString() {
         return rankname;
     }
+
+    public String getTranslationKey() {
+        return "rank.tacz_npc." + name().toLowerCase();
+    }
 }
