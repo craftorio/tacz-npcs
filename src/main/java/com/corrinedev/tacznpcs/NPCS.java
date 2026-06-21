@@ -18,7 +18,6 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -29,6 +28,7 @@ public class NPCS {
 
     public static final String MODID = "tacz_npc";
     public static final Logger LOGGER = LogUtils.getLogger();
+    public static String VERSION = "unknown";
 
     public NPCS() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -49,7 +49,10 @@ public class NPCS {
         if (event.getTabKey() == CreativeModeTabs.SPAWN_EGGS) event.accept(ItemRegistry.DUTYSPAWN.get());
     }
     private void commonSetup(final FMLCommonSetupEvent event) {
-        // Some common setup code
+        event.enqueueWork(() -> net.minecraftforge.fml.ModList.get().getModContainerById(MODID).ifPresent(container -> {
+            VERSION = container.getModInfo().getVersion().toString();
+            LOGGER.info("[Tacz] NPCs {} loaded (Craftorio fork)", VERSION);
+        }));
     }
 
     @SubscribeEvent
