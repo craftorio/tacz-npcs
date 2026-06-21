@@ -1,0 +1,18 @@
+{
+  "entity.tacz_npc.duty": "Караул",
+  "entity.tacz_npc.bandit": "Бандит",
+  "entity.tacz_npc.named": "%s %s",
+  "entity.tacz_npc.patrol_leader": "%s | Лидер патруля",
+  "rank.tacz_npc.rookie": "Новичок",
+  "rank.tacz_npc.experienced": "Опытный",
+  "rank.tacz_npc.veteran": "Ветеран",
+  "rank.tacz_npc.expert": "Эксперт",
+  "item.tacz_npc.rookie": "Шеврон новичка",
+  "item.tacz_npc.experienced": "Шеврон опытного",
+  "item.tacz_npc.veteran": "Шеврон ветерана",
+  "item.tacz_npc.expert": "Шеврон эксперта",
+  "item.tacz_npc.patch.duty": "Шеврон караула — %s",
+  "item.tacz_npc.patch.bandit": "Шеврон бандита — %s",
+  "item.tacz_npc.duty_spawn_egg": "Яйцо призыва караула",
+  "item.tacz_npc.bandit_spawn_egg": "Яйцо призыва бандита"
+}

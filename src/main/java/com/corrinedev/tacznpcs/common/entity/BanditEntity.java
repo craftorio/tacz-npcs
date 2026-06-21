@@ -35,9 +35,11 @@ public class BanditEntity extends AbstractScavEntity {
         applySpawnLoadout(p_21684_, new ResourceLocation(MODID, "bandit"));
         for(int i = 0; i < this.inventory.getContainerSize() - 1; i++) {
             if(inventory.getItem(i).getItem() instanceof PatchItem r) {
-                this.setCustomName(Component.literal(r.rank.toString() + " " + this.getName().getString()));
-                inventory.getItem(i).getOrCreateTag().putString("type","bandit");
-                inventory.getItem(i).setHoverName(Component.literal( r.rank.toString() + " Bandit Patch"));
+                this.setCustomName(Component.translatable("entity.tacz_npc.named",
+                        Component.translatable(r.rank.getTranslationKey()), this.getName()));
+                inventory.getItem(i).getOrCreateTag().putString("type", "bandit");
+                inventory.getItem(i).setHoverName(Component.translatable("item.tacz_npc.patch.bandit",
+                        Component.translatable(r.rank.getTranslationKey())));
                 switch (r.rank) {
                     case ROOKIE -> {
 

@@ -552,7 +552,7 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         if (this.isPatrolLeader) {
             Component name = this.getCustomName();
             if (name != null) {
-                this.setCustomName(Component.literal(name.getString() + " | Patrol Leader"));
+                this.setCustomName(Component.translatable("entity.tacz_npc.patrol_leader", name));
             }
         }
     }

@@ -1,10 +1,18 @@
 {
   "entity.tacz_npc.duty": "Duty",
   "entity.tacz_npc.bandit": "Bandit",
+  "entity.tacz_npc.named": "%s %s",
+  "entity.tacz_npc.patrol_leader": "%s | Patrol Leader",
+  "rank.tacz_npc.rookie": "Rookie",
+  "rank.tacz_npc.experienced": "Experienced",
+  "rank.tacz_npc.veteran": "Veteran",
+  "rank.tacz_npc.expert": "Expert",
   "item.tacz_npc.rookie": "Rookie Patch",
   "item.tacz_npc.experienced": "Experienced Patch",
   "item.tacz_npc.veteran": "Veteran Patch",
   "item.tacz_npc.expert": "Expert Patch",
+  "item.tacz_npc.patch.duty": "%s Duty Patch",
+  "item.tacz_npc.patch.bandit": "%s Bandit Patch",
   "item.tacz_npc.duty_spawn_egg": "Duty Spawn Egg",
   "item.tacz_npc.bandit_spawn_egg": "Bandit Spawn Egg"
 }
