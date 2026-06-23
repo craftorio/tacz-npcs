@@ -215,6 +215,22 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         }
     }
 
+    @Override
+    public ItemStack getItemBySlot(EquipmentSlot slot) {
+        if (slot == null) {
+            return ItemStack.EMPTY;
+        }
+        return super.getItemBySlot(slot);
+    }
+
+    @Override
+    public void setItemSlot(EquipmentSlot slot, ItemStack stack) {
+        if (slot == null) {
+            return;
+        }
+        super.setItemSlot(slot, stack);
+    }
+
     public boolean isSlim() {
         return true;
     }
@@ -593,15 +609,18 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
                 }
             }
         }
-        if(inventory.hasAnyMatching((i) -> i.getItem() instanceof ArmorItem)) {
-            for (int i = 0; i < inventory.getContainerSize() - 1; i++) {
-                ItemStack stack = inventory.getItem(i);
-                if (stack.getItem() instanceof ArmorItem item) {
-                    EquipmentSlot slot = item.getEquipmentSlot(stack);
-                    if (slot != null && this.getItemBySlot(slot).isEmpty()) {
-                        this.setItemSlotAndDropWhenKilled(slot, stack);
-                    }
-                }
+        for (int i = 0; i < inventory.getContainerSize() - 1; i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            Equipable equipable = Equipable.get(stack);
+            if (equipable == null) {
+                continue;
+            }
+            EquipmentSlot slot = equipable.getEquipmentSlot();
+            if (slot != null && this.getItemBySlot(slot).isEmpty()) {
+                this.setItemSlotAndDropWhenKilled(slot, stack);
             }
         }
         if(inventory.hasAnyOf(Set.of(ModItems.MODERN_KINETIC_GUN.get())) && !(this.getMainHandItem().getItem() instanceof ModernKineticGunItem)) {
