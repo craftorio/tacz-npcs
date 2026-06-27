@@ -33,9 +33,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import com.corrinedev.tacznpcs.common.entity.behavior.NearestTargetOrRetaliate;
+import com.corrinedev.tacznpcs.common.entity.behavior.TargetLock;
 import net.tslat.smartbrainlib.api.SmartBrainOwner;
 import net.tslat.smartbrainlib.api.core.BrainActivityGroup;
 import net.tslat.smartbrainlib.api.core.SmartBrainProvider;
+import net.tslat.smartbrainlib.api.core.behaviour.ExtendedBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.FirstApplicableBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.OneRandomBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.attack.AnimatableMeleeAttack;
@@ -388,6 +391,15 @@ public class ScavPlayer extends ServerPlayer {
         private LivingEntity currentAngerTarget;
         private ArrayList<Player> attackers = new ArrayList<>();
         private boolean panic = false;
+        private int targetLockTicks = 0;
+
+        public void lockTarget() {
+            this.targetLockTicks = TargetLock.LOCK_TICKS;
+        }
+
+        public boolean isTargetLocked() {
+            return this.targetLockTicks > 0;
+        }
 
         public InternalPathfinder(EntityType<? extends PathfinderMob> pEntityType, Level pLevel) {
             super(pEntityType, pLevel);
@@ -414,6 +426,10 @@ public class ScavPlayer extends ServerPlayer {
 
             super.tick();
 
+            if (this.targetLockTicks > 0) {
+                this.targetLockTicks--;
+            }
+
             attachedEntity.moveTo(this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
             attachedEntity.setPose(this.getPose());
             attachedEntity.setYHeadRot(this.getYHeadRot());
@@ -431,6 +447,9 @@ public class ScavPlayer extends ServerPlayer {
 
         @Override
         public boolean hurt(DamageSource pSource, float pAmount) {
+            if (pSource.getEntity() instanceof LivingEntity living) {
+                TargetLock.retaliate(this, living);
+            }
             this.attachedEntity.hurt(pSource, pAmount);
             return false;
         }
@@ -455,11 +474,8 @@ public class ScavPlayer extends ServerPlayer {
         @Override
         public BrainActivityGroup<InternalPathfinder> getCoreTasks() {
             return BrainActivityGroup.coreTasks(new Behavior[]{
-                    // keep distance from current target
-                    (new AvoidEntity<>()).noCloserThan(12).avoiding(entity -> entity == this.getTarget()),
-
-                    // pick/retaliate targets
-                    new TargetOrRetaliate<InternalPathfinder>()
+                    // pick nearest target
+                    new NearestTargetOrRetaliate<InternalPathfinder>()
                             .isAllyIf((e, l) -> l instanceof InternalPathfinder)
                             .attackablePredicate(l -> l != null && this.hasLineOfSight(l))
                             .alertAlliesWhen((m, e) -> e != null && m.hasLineOfSight(e))
@@ -478,18 +494,24 @@ public class ScavPlayer extends ServerPlayer {
 
                     (new LookAtTarget<>()).runFor(entity -> RandomSource.create().nextInt(40, 300)),
 
-                    (new StrafeTarget<>()).speedMod(0.75f).strafeDistance(24)
-                            .stopStrafingWhen(entity -> this.getTarget() == null || !attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get()))
-                            .startCondition(e -> attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
-
-                    new MoveToWalkTarget<>()
+                    new OneRandomBehaviour<>(new ExtendedBehaviour[]{
+                            (new StrafeTarget<>())
+                                    .speedMod(0.85f)
+                                    .strafeDistance(14)
+                                    .stopStrafingWhen(entity -> this.getTarget() == null
+                                            || !attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())
+                                            || this.panic)
+                                    .startCondition(e -> attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())
+                                            && !this.panic),
+                            new MoveToWalkTarget<>()
+                    })
             });
         }
 
         public BrainActivityGroup<InternalPathfinder> getIdleTasks() {
             return BrainActivityGroup.idleTasks(new Behavior[]{
                     new FirstApplicableBehaviour(
-                            new TargetOrRetaliate<>(),
+                            new NearestTargetOrRetaliate<>(),
                             new SetPlayerLookTarget<>(),
                             new SetRandomLookTarget<>()),
                     new OneRandomBehaviour(
@@ -501,12 +523,12 @@ public class ScavPlayer extends ServerPlayer {
         @Override
         public BrainActivityGroup<InternalPathfinder> getFightTasks() {
             return BrainActivityGroup.fightTasks(new Behavior[]{
-                    new InvalidateAttackTarget<InternalPathfinder>(),
+                    new InvalidateAttackTarget<InternalPathfinder>()
+                            .ignoreFailedPathfinding()
+                            .invalidateIf(TargetLock::shouldInvalidate),
 
                     new SetWalkTargetToAttackTarget<InternalPathfinder>()
                             .startCondition(e -> !attachedEntity.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
-
-                    new SetRetaliateTarget<InternalPathfinder>(),
 
                     new FirstApplicableBehaviour<InternalPathfinder>(
                             new TaczShootAttack<InternalPathfinder>(64)

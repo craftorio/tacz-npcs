@@ -18,11 +18,14 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.tslat.smartbrainlib.api.core.BrainActivityGroup;
+import net.tslat.smartbrainlib.api.core.behaviour.ExtendedBehaviour;
+import net.tslat.smartbrainlib.api.core.behaviour.OneRandomBehaviour;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.look.LookAtTarget;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.AvoidEntity;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.MoveToWalkTarget;
 import net.tslat.smartbrainlib.api.core.behaviour.custom.move.StrafeTarget;
-import net.tslat.smartbrainlib.api.core.behaviour.custom.target.TargetOrRetaliate;
+import com.corrinedev.tacznpcs.common.entity.behavior.NearestTargetOrRetaliate;
+import com.corrinedev.tacznpcs.common.entity.behavior.TargetLock;
 import net.tslat.smartbrainlib.api.core.sensor.ExtendedSensor;
 import net.tslat.smartbrainlib.api.core.sensor.vanilla.HurtBySensor;
 import net.tslat.smartbrainlib.api.core.sensor.vanilla.NearbyLivingEntitySensor;
@@ -102,6 +105,9 @@ public class DutyEntity extends AbstractScavEntity {
         paniccooldown = 60;
         if (pSource.getEntity() instanceof LivingEntity entity) {
             this.currentAngerTarget = entity;
+            if (isAttackableTarget(entity)) {
+                TargetLock.retaliate(this, entity);
+            }
             if (allyAlertCooldown <= 0) {
                 allyAlertCooldown = ALLY_ALERT_COOLDOWN_TICKS;
                 List<DutyEntity> entities = this.level().getEntitiesOfClass(DutyEntity.class, AABB.ofSize(this.position(), 64, 16, 64));
@@ -110,9 +116,10 @@ public class DutyEntity extends AbstractScavEntity {
                         continue;
                     }
                     if (duty.hasLineOfSight(entity) || BehaviorUtils.entityIsVisible(duty.getBrain(), entity)) {
-                        duty.setTarget(entity);
                         duty.currentAngerTarget = entity;
-                        duty.brain.setMemory(MemoryModuleType.ATTACK_TARGET, entity);
+                        if (isAttackableTarget(entity)) {
+                            TargetLock.retaliate(duty, entity);
+                        }
                     }
                 }
             }
@@ -166,13 +173,10 @@ public class DutyEntity extends AbstractScavEntity {
     @Override
     public BrainActivityGroup<AbstractScavEntity> getCoreTasks() {
         return BrainActivityGroup.coreTasks(new Behavior[]{
-                //new StayNearHome<>(e -> (e instanceof DutyEntity d) ? d.homePos : null, HOME_RADIUS, 1.05f),                // держимся подальше от текущей цели
-                (new AvoidEntity<>())
-                        .noCloserThan(8)
-                        .avoiding(entity -> entity == this.getTarget()),
+                //new StayNearHome<>(e -> (e instanceof DutyEntity d) ? d.homePos : null, HOME_RADIUS, 1.05f),
 
-                // выбор/реталиэйт цели (союзники — DutyEntity)
-                new TargetOrRetaliate<DutyEntity>()
+                // выбор цели — ближайшая видимая
+                new NearestTargetOrRetaliate<DutyEntity>()
                         //.isAllyIf((e, l) -> l instanceof DutyEntity)
                         // союзники = любые НЕ монстры (включая игроков, жителей, големов, животных и т.д.)
                         .isAllyIf((e, l) -> l != null && l.getType().getCategory() != MobCategory.MONSTER)
@@ -194,15 +198,22 @@ public class DutyEntity extends AbstractScavEntity {
                 (new LookAtTarget<>())
                         .runFor(entity -> entity.getRandom().nextInt(40, 300)),
 
-                (new StrafeTarget<>())
-                        .speedMod(0.75f)
-                        .strafeDistance(24)
-                        .stopStrafingWhen(entity ->
-                                this.getTarget() == null || !this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get()))
-                        .startCondition(e ->
-                        this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
-
-                new MoveToWalkTarget<>()
+                new OneRandomBehaviour<>(new ExtendedBehaviour[]{
+                        (new StrafeTarget<>())
+                                .speedMod(0.85f)
+                                .strafeDistance(14)
+                                .stopStrafingWhen(entity ->
+                                        this.getTarget() == null || !this.isUsingGun() || this.panic)
+                                .startCondition(e -> this.isUsingGun() && !this.panic),
+                        new MoveToWalkTarget<>()
+                })
         });
+    }
+
+    private static boolean isAttackableTarget(LivingEntity entity) {
+        return entity instanceof Player
+                || entity instanceof BanditEntity
+                || entity instanceof Monster
+                || entity.getType().getCategory() == MobCategory.MONSTER;
     }
 }
