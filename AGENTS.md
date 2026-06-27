@@ -1,6 +1,6 @@
-# Agent guide — tacz-npcs
+# Repository guide — tacz-npcs
 
-Instructions for AI coding agents working in this repository.
+Development guide for this repository.
 
 ## Project
 
@@ -22,7 +22,7 @@ Main development branch for 1.20.1: `1.20.1`.
 
 - **Do not open pull requests** against the upstream/source repository (Corrinedev original). Work on the craftorio fork only; push branches and tags to `origin` (`craftorio/tacz-npcs`).
 - **Do not commit or push** unless the user explicitly asks.
-- **Do not** add `Co-authored-by`, agent names, or AI attribution to commits, docs, release notes, or **code comments**.
+- **Do not** add `Co-authored-by` or third-party attribution to commits, docs, release notes, or **code comments**.
 - Version lives in `gradle.properties`: `mod_version_base` + `craftorio_version` suffix (full version e.g. `1.0.3-craftorio`). Bump `mod_version_base` when preparing a release.
 - Releases are driven by GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
   - Tag `release/<mod_version>+<craftorio_version>` (e.g. `release/1.0.3+craftorio`), or
@@ -108,7 +108,7 @@ Defined in `Config.java` / `ClientConfig.java`.
 1. **Minimize scope** — smallest correct diff; do not refactor unrelated code.
 2. **Match existing style** — package layout, SmartBrainLib patterns, Forge event subscribers, deferred registers.
 3. **Prefer extending existing abstractions** — behaviours, sensors, `TargetLock`, loot tables/tags over new parallel systems.
-4. **Comments** — only for non-obvious combat AI or TACZ integration details. **Never** mention AI agents, Cursor, Claude, Copilot, or similar in comments (see [.cursor/rules/no-ai-attribution.mdc](.cursor/rules/no-ai-attribution.mdc)).
+4. **Comments** — only for non-obvious combat AI or TACZ integration details. Never name assistants or codegen tools in comments.
 5. **No new markdown docs** unless the user asks (README, AGENTS.md, etc. are exceptions when requested).
 6. **Entity AI changes** — consider both brain (`BrainUtils`, sensors) and edge cases: `deadAsContainer`, `hasLineOfSight`, target lock, ally predicates.
 7. **Damage from guns** — if adding NPC↔monster interaction, verify TACZ events and `LivingHurtEvent`; do not assume vanilla hurt attribution works.

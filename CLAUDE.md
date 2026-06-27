@@ -1,8 +1,8 @@
-# Claude — tacz-npcs
+# tacz-npcs
 
 Read **[AGENTS.md](AGENTS.md)** first. It is the canonical guide for this repository: project layout, git workflow, architecture, conventions, and common tasks.
 
-Follow everything in AGENTS.md unless the user gives conflicting instructions for a specific task.
+Follow everything in AGENTS.md unless conflicting instructions are given for a specific task.
 
 Quick facts:
 
@@ -10,4 +10,4 @@ Quick facts:
 - Default branch: **`1.20.1`**
 - Fork: [craftorio/tacz-npcs](https://github.com/craftorio/tacz-npcs) — do not open PRs to the upstream Corrinedev repo
 - Build: `./gradlew compileJava` / `./gradlew build`
-- No AI attribution in commits, docs, or code comments
+- No tooling attribution in commits, docs, or code comments

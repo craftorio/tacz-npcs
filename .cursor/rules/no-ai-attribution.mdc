@@ -1,30 +1,30 @@
 ---
-description: No AI agent attribution in code, comments, or commits
+description: No tooling attribution in code, comments, or commits
 alwaysApply: true
 ---
 
-# No AI agent attribution
+# No tooling attribution
 
-Never leave traces of AI tooling in the repository.
+Never leave traces of assistants or codegen tooling in the repository.
 
 ## Code comments
 
-Do not add comments that mention AI agents, assistants, or codegen tools — for example Cursor, Claude, Copilot, ChatGPT, "AI-generated", "written by an agent", or similar.
+Do not add comments that mention assistants, codegen tools, or how the change was produced.
 
-Comments must explain **code behavior only**, not how the change was produced.
+Comments must explain **code behavior only**.
 
 ```java
-// BAD: added by Cursor to fix zombie targeting
-// BAD: AI suggested this approach
+// BAD: added by tooling to fix zombie targeting
+// BAD: suggested by an assistant
 
 // GOOD: TACZ gun hits may not set DamageSource.getEntity(); retaliate via event
 ```
 
 ## Commits, docs, and releases
 
-- No `Co-authored-by` or agent/tool attribution in commit messages.
-- No AI attribution in README, AGENTS.md, release notes, or other docs unless the user explicitly asks for agent documentation.
+- No `Co-authored-by` or tool/assistant attribution in commit messages.
+- No such attribution in README, AGENTS.md, release notes, or other docs.
 
 ## When editing existing comments
 
-If you touch a file, remove any AI-attribution comments you find — do not preserve or extend them.
+If you touch a file, remove attribution comments you find — do not preserve or extend them.
