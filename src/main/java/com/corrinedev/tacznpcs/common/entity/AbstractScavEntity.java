@@ -1,7 +1,9 @@
 package com.corrinedev.tacznpcs.common.entity;
 
 import com.corrinedev.tacznpcs.Config;
+import com.corrinedev.tacznpcs.common.entity.behavior.NearestTargetOrRetaliate;
 import com.corrinedev.tacznpcs.common.entity.behavior.TaczShootAttack;
+import com.corrinedev.tacznpcs.common.entity.behavior.TargetLock;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import com.corrinedev.tacznpcs.common.entity.inventory.ScavInventory;
 import com.tacz.guns.api.TimelessAPI;
@@ -87,6 +89,7 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
     public int collectiveShots = 0;
     public boolean panic = false;
     public int paniccooldown = 0;
+    public int targetLockTicks = 0;
     public boolean isReloading = false;
     public boolean deadAsContainer = false;
     public int deadAsContainerTime = 0;
@@ -181,6 +184,9 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
             if (attackers.size() > MAX_TRACKED_ATTACKERS) {
                 attackers.remove(0);
             }
+            if (living.getType() != this.getType()) {
+                TargetLock.retaliate(this, living);
+            }
         }
         if (this.deadAsContainer) {
             return false;
@@ -271,19 +277,15 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
 
     public BrainActivityGroup<AbstractScavEntity> getCoreTasks() {
         return BrainActivityGroup.coreTasks(new Behavior[]{
-                // держимся подальше от текущей цели
-                (new AvoidEntity<>())
-                        .noCloserThan(12)
-                        .avoiding(entity -> entity == this.getTarget()),
-
                 // следуем за лидером патруля (поле patrolLeader уже есть)
                 new net.tslat.smartbrainlib.api.core.behaviour.custom.move.FollowEntity<AbstractScavEntity, AbstractScavEntity>()
                         .following(e -> e.patrolLeader)
                         .stopFollowingWithin(8)
-                        .speedMod(1.1f),
+                        .speedMod(1.1f)
+                        .stopIf(e -> e.getTarget() != null),
 
-                // выбор/реталиэйт цели
-                new TargetOrRetaliate<AbstractScavEntity>()
+                // выбор цели — ближайшая видимая
+                new NearestTargetOrRetaliate<AbstractScavEntity>()
                         .isAllyIf((e, l) -> l.getType() == e.getType())
                         .attackablePredicate(l -> l != null && this.hasLineOfSight(l))
                         .alertAlliesWhen((m, e) -> e != null && m.hasLineOfSight(e))
@@ -313,11 +315,12 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
 
                 new OneRandomBehaviour<>(new ExtendedBehaviour[]{
                         new StrafeTarget<>()
-                                .speedMod(0.75f)
-                                .strafeDistance(24)
+                                .speedMod(0.85f)
+                                .strafeDistance(14)
                                 .stopStrafingWhen(entity -> this.getTarget() == null
-                                        || !this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get()))
-                                .startCondition(e -> this.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
+                                        || !this.isUsingGun()
+                                        || this.panic)
+                                .startCondition(e -> this.isUsingGun() && !this.panic),
                         new MoveToWalkTarget<>()
                 }),
         });
@@ -426,7 +429,7 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
 
     public BrainActivityGroup<AbstractScavEntity> getIdleTasks() {
         return BrainActivityGroup.idleTasks(new FirstApplicableBehaviour(new ExtendedBehaviour[]{
-                new TargetOrRetaliate<>(),
+                new NearestTargetOrRetaliate<>(),
                 new SetPlayerLookTarget<>(),
                 new SetRandomLookTarget<>()}),
                 new OneRandomBehaviour(new ExtendedBehaviour[]{(
@@ -437,10 +440,11 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
     @Override
     public BrainActivityGroup<AbstractScavEntity> getFightTasks() {
         return BrainActivityGroup.fightTasks(new Behavior[]{
-                new InvalidateAttackTarget<AbstractScavEntity>(),
+                new InvalidateAttackTarget<AbstractScavEntity>()
+                        .ignoreFailedPathfinding()
+                        .invalidateIf(TargetLock::shouldInvalidate),
                 new SetWalkTargetToAttackTarget<AbstractScavEntity>()
                         .startCondition(e -> !e.getMainHandItem().is(ModItems.MODERN_KINETIC_GUN.get())),
-                new SetRetaliateTarget<AbstractScavEntity>(),
 
                 new FirstApplicableBehaviour<AbstractScavEntity>(
                         new TaczShootAttack<AbstractScavEntity>(64)
@@ -464,6 +468,24 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
     public boolean isUsingGun() {
         return this.getMainHandItem().getItem() instanceof ModernKineticGunItem;
     }
+
+    public void lockTarget() {
+        this.targetLockTicks = TargetLock.LOCK_TICKS;
+    }
+
+    public boolean isTargetLocked() {
+        return this.targetLockTicks > 0;
+    }
+
+    @Override
+    public void setTarget(@Nullable LivingEntity target) {
+        LivingEntity previous = this.getTarget();
+        super.setTarget(target);
+        if (target != null && target != previous) {
+            lockTarget();
+        }
+    }
+
     @Override
     public abstract List<ExtendedSensor<AbstractScavEntity>> getSensors();
 
@@ -581,6 +603,9 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
 
     @Override
     public void tick() {
+        if (this.targetLockTicks > 0) {
+            this.targetLockTicks--;
+        }
         if(this.getTarget() != null && this.getTarget() instanceof AbstractScavEntity scav && scav.deadAsContainer) {
             this.setTarget(null);
             this.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, (LivingEntity) null);
