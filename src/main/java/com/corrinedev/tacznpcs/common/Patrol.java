@@ -63,7 +63,6 @@ public class Patrol<T extends AbstractScavEntity> {
         });
         BannerPattern.Builder pattern = new BannerPattern.Builder().addPattern(BannerPatterns.BORDER, DyeColor.BLACK).addPattern(BannerPatterns.CIRCLE_MIDDLE, DyeColor.BLUE).addPattern(BannerPatterns.FLOWER, DyeColor.YELLOW);
         ItemStack banner = Items.RED_BANNER.getDefaultInstance();
-        System.out.println("BANNER - " + pattern.toListTag());
         banner.getOrCreateTag().put("banner_patterns", pattern.toListTag());
         this.leader.patrolLeaderBanner = banner;
     }

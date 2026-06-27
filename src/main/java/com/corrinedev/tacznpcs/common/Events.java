@@ -26,13 +26,17 @@ public class Events {
     }
     @SubscribeEvent
     public static void openDeadScav(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
         List<AbstractScavEntity> scavs = event.getLevel().getEntitiesOfClass(AbstractScavEntity.class, AABB.ofSize(event.getHitVec().getLocation(), 1, 1, 1));
-        if(!scavs.isEmpty()) {
-            scavs.forEach((entity) -> {
-                if(entity.deadAsContainer || entity.isDeadOrDying()) {
-                    entity.openCustomInventoryScreen(event.getEntity());
-                }
-            });
+        if (scavs.isEmpty()) {
+            return;
+        }
+        for (AbstractScavEntity entity : scavs) {
+            if (entity.deadAsContainer || entity.isDeadOrDying()) {
+                entity.openCustomInventoryScreen(event.getEntity());
+            }
         }
     }
 }
