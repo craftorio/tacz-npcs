@@ -8,69 +8,25 @@
           "type": "minecraft:tag",
           "name": "tacz_npc:bandit_officer",
           "expand": false,
-          "weight": 2,
-          "functions": [
-            {
-              "function": "minecraft:set_damage",
-              "damage": {
-                "type": "minecraft:uniform",
-                "min": 25,
-                "max": 160
-              },
-              "add": true
-            }
-          ]
+          "weight": 2
         },
         {
           "type": "minecraft:tag",
           "name": "tacz_npc:bandit_riot",
           "expand": false,
-          "weight": 3,
-          "functions": [
-            {
-              "function": "minecraft:set_damage",
-              "damage": {
-                "type": "minecraft:uniform",
-                "min": 40,
-                "max": 160
-              },
-              "add": true
-            }
-          ]
+          "weight": 3
         },
         {
           "type": "minecraft:tag",
           "name": "tacz_npc:bandit_thug",
           "expand": false,
-          "weight": 4,
-          "functions": [
-            {
-              "function": "minecraft:set_damage",
-              "damage": {
-                "type": "minecraft:uniform",
-                "min": 60,
-                "max": 200
-              },
-              "add": true
-            }
-          ]
+          "weight": 4
         },
         {
           "type": "minecraft:tag",
           "name": "tacz_npc:bandit_grunt",
           "expand": false,
-          "weight": 5,
-          "functions": [
-            {
-              "function": "minecraft:set_damage",
-              "damage": {
-                "type": "minecraft:uniform",
-                "min": 65,
-                "max": 220
-              },
-              "add": true
-            }
-          ]
+          "weight": 5
         }
       ]
     },
