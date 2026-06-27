@@ -44,6 +44,8 @@ public class DutyEntity extends AbstractScavEntity {
     private LivingEntity currentAngerTarget;
     private static final int ALERT_RANGE_Y = 10;
     private static final UniformInt ALERT_INTERVAL = TimeUtil.rangeOfSeconds(4, 6);
+    private static final int ALLY_ALERT_COOLDOWN_TICKS = 40;
+    private int allyAlertCooldown = 0;
     private boolean angry = false;
 
     static {
@@ -100,12 +102,19 @@ public class DutyEntity extends AbstractScavEntity {
         paniccooldown = 60;
         if (pSource.getEntity() instanceof LivingEntity entity) {
             this.currentAngerTarget = entity;
-            List<DutyEntity> entities = this.level().getEntitiesOfClass(DutyEntity.class, AABB.ofSize(this.position(), 64, 16, 64));
-            List<DutyEntity> filter1 = entities.stream().filter((e) -> e.hasLineOfSight(currentAngerTarget) || BehaviorUtils.entityIsVisible(e.getBrain(), currentAngerTarget)).toList();
-            for (DutyEntity duty : filter1) {
-                duty.setTarget(currentAngerTarget);
-                duty.currentAngerTarget = entity;
-                duty.brain.setMemory(MemoryModuleType.ATTACK_TARGET, currentAngerTarget);
+            if (allyAlertCooldown <= 0) {
+                allyAlertCooldown = ALLY_ALERT_COOLDOWN_TICKS;
+                List<DutyEntity> entities = this.level().getEntitiesOfClass(DutyEntity.class, AABB.ofSize(this.position(), 64, 16, 64));
+                for (DutyEntity duty : entities) {
+                    if (duty == this || duty.currentAngerTarget == entity) {
+                        continue;
+                    }
+                    if (duty.hasLineOfSight(entity) || BehaviorUtils.entityIsVisible(duty.getBrain(), entity)) {
+                        duty.setTarget(entity);
+                        duty.currentAngerTarget = entity;
+                        duty.brain.setMemory(MemoryModuleType.ATTACK_TARGET, entity);
+                    }
+                }
             }
         }
 
@@ -126,6 +135,9 @@ public class DutyEntity extends AbstractScavEntity {
 
     @Override
     public void tick() {
+        if (allyAlertCooldown > 0) {
+            allyAlertCooldown--;
+        }
         if (this.getTarget() == null && this.angry) {
             angry = false;
         }
@@ -180,7 +192,7 @@ public class DutyEntity extends AbstractScavEntity {
                         .runFor(e -> 20),
 
                 (new LookAtTarget<>())
-                        .runFor(entity -> RandomSource.create().nextInt(40, 300)),
+                        .runFor(entity -> entity.getRandom().nextInt(40, 300)),
 
                 (new StrafeTarget<>())
                         .speedMod(0.75f)

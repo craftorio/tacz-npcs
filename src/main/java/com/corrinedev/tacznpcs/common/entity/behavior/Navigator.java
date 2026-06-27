@@ -25,7 +25,6 @@ public class Navigator<E extends LivingEntity & Navigator.NavigatingEntity<E>> {
     }
 
     public void moveTo(double x, double y, double z) {
-        System.out.println("Moving to: " + x + ", " + y + ", " + z);
         entity.lerpMotion(x, y, z);
     }
     public void moveTo(LivingEntity target, double speed, double stayDistance) {

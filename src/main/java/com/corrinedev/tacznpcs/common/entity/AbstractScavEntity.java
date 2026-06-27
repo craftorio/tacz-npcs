@@ -171,12 +171,18 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         return inventory;
     }
 
+    private static final int MAX_TRACKED_ATTACKERS = 8;
+
     @Override
     public boolean hurt(DamageSource pSource, float pAmount) {
-        if(pSource.getEntity() instanceof LivingEntity living) {
+        if (pSource.getEntity() instanceof LivingEntity living) {
+            attackers.remove(living);
             attackers.add(living);
+            if (attackers.size() > MAX_TRACKED_ATTACKERS) {
+                attackers.remove(0);
+            }
         }
-        if(this.deadAsContainer) {
+        if (this.deadAsContainer) {
             return false;
         }
         return super.hurt(pSource, pAmount);
@@ -299,7 +305,7 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
                         .runFor(e -> 20),
 
                 (new LookAtTarget<AbstractScavEntity>())
-                        .runFor(entity -> RandomSource.create().nextInt(40, 300))
+                        .runFor(entity -> entity.getRandom().nextInt(40, 300))
                         .stopIf(e -> {
                     var t = e.getTarget();
                     return t instanceof AbstractScavEntity scav && scav.deadAsContainer;
@@ -425,7 +431,7 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
                 new SetRandomLookTarget<>()}),
                 new OneRandomBehaviour(new ExtendedBehaviour[]{(
                         new SetRandomWalkTarget<>()).speedModifier(1.0F),
-                        (new Idle<>()).runFor((entity) -> RandomSource.create().nextInt(30, 60))}));
+                        (new Idle<>()).runFor((entity) -> entity.getRandom().nextInt(30, 60))}));
     }
 
     @Override
@@ -600,58 +606,38 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         }
 
         onTickServerSide();
-        if(ModList.get().isLoaded("gundurability")) {
-            if(this.getMainHandItem().getItem() instanceof ModernKineticGunItem) {
-                if(this.getMainHandItem().getOrCreateTag().getBoolean("Jammed")) {
-                    if(RandomSource.create().nextInt(0, 60) == 1) {
-                        this.getMainHandItem().getOrCreateTag().putBoolean("Jammed", false);
-                    }
-                }
-            }
-        }
-        for (int i = 0; i < inventory.getContainerSize() - 1; i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (stack.isEmpty()) {
-                continue;
-            }
-            Equipable equipable = Equipable.get(stack);
-            if (equipable == null) {
-                continue;
-            }
-            EquipmentSlot slot = equipable.getEquipmentSlot();
-            if (slot != null && this.getItemBySlot(slot).isEmpty()) {
-                this.setItemSlotAndDropWhenKilled(slot, stack);
-            }
-        }
-        if(inventory.hasAnyOf(Set.of(ModItems.MODERN_KINETIC_GUN.get())) && !(this.getMainHandItem().getItem() instanceof ModernKineticGunItem)) {
-            for (int i = 0; i < inventory.getContainerSize() - 1; i++) {
-                if (inventory.getItem(i).is(ModItems.MODERN_KINETIC_GUN.get())) {
-                    this.setItemSlotAndDropWhenKilled(EquipmentSlot.MAINHAND, inventory.getItem(i));
-                }
-            }
-        } else if(!(this.getMainHandItem().getItem() instanceof ModernKineticGunItem)) {
-            for (int i = 0; i < inventory.getContainerSize() - 1; i++) {
-                if (inventory.getItem(i).getAttributeModifiers(EquipmentSlot.MAINHAND).containsKey(Attributes.ATTACK_DAMAGE)) {
-                    this.setItemSlotAndDropWhenKilled(EquipmentSlot.MAINHAND, inventory.getItem(i));
-                    //inventory.removeItem(i, 1);
+
+        ItemStack mainHand = this.getMainHandItem();
+        boolean holdingGun = mainHand.getItem() instanceof ModernKineticGunItem;
+
+        if (holdingGun && ModList.get().isLoaded("gundurability")) {
+            CompoundTag mainHandTag = mainHand.getTag();
+            if (mainHandTag != null && mainHandTag.getBoolean("Jammed")) {
+                if (this.random.nextInt(60) == 0) {
+                    mainHandTag.putBoolean("Jammed", false);
                 }
             }
         }
 
-        if(getMainHandItem().getItem() instanceof ModernKineticGunItem gun) {
-            if(this.getMainHandItem().getOrCreateTag().getInt("GunCurrentAmmoCount") == 0 && !this.getMainHandItem().getOrCreateTag().getBoolean("HasBulletInBarrel")) {
+        if ((this.tickCount & 19) == 0) {
+            autoEquipFromInventory(holdingGun);
+        }
+
+        if (holdingGun) {
+            ModernKineticGunItem gun = (ModernKineticGunItem) mainHand.getItem();
+            CompoundTag mainHandTag = mainHand.getTag();
+            boolean noAmmo = mainHandTag == null
+                    || (mainHandTag.getInt("GunCurrentAmmoCount") == 0 && !mainHandTag.getBoolean("HasBulletInBarrel"));
+            if (noAmmo) {
                 this.reload();
             }
-        }
-        if (getMainHandItem().getItem() instanceof ModernKineticGunItem gun) {
-            if(gun.getCurrentAmmoCount(getMainHandItem()) > 0) {
+            if (gun.getCurrentAmmoCount(mainHand) > 0) {
                 this.isReloading = false;
             } else {
-                if(!this.isReloading) {
+                if (!this.isReloading) {
                     this.reload();
                 }
                 this.isReloading = true;
-
             }
         }
 
@@ -674,16 +660,63 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
                 panic = false;
             }
         }
-        List<ItemEntity> items = this.level().getEntitiesOfClass(ItemEntity.class, this.getBoundingBox().inflate(1.1));
+        if ((this.tickCount & 9) == 0) {
+            List<ItemEntity> items = this.level().getEntitiesOfClass(ItemEntity.class, this.getBoundingBox().inflate(1.1));
             if (!items.isEmpty()) {
                 for (ItemEntity item : items) {
-                    if (item.getItem().getItem() instanceof ModernKineticGunItem || item.getItem().is(ItemTags.AXES) || item.getItem().is(ItemTags.SWORDS) || item.getItem().getItem() instanceof ArmorItem || item.getItem().getItem() instanceof AmmoItem) {
-
+                    ItemStack stack = item.getItem();
+                    if (stack.getItem() instanceof ModernKineticGunItem
+                            || stack.is(ItemTags.AXES)
+                            || stack.is(ItemTags.SWORDS)
+                            || stack.getItem() instanceof ArmorItem
+                            || stack.getItem() instanceof AmmoItem) {
                         pickUpItem(item);
                     }
                 }
+            }
         }
         super.tick();
+    }
+
+    private void autoEquipFromInventory(boolean holdingGun) {
+        int size = inventory.getContainerSize() - 1;
+        for (int i = 0; i < size; i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            Equipable equipable = Equipable.get(stack);
+            if (equipable == null) {
+                continue;
+            }
+            EquipmentSlot slot = equipable.getEquipmentSlot();
+            if (slot != null && this.getItemBySlot(slot).isEmpty()) {
+                this.setItemSlotAndDropWhenKilled(slot, stack);
+            }
+        }
+        if (holdingGun) {
+            return;
+        }
+        for (int i = 0; i < size; i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (stack.getItem() instanceof ModernKineticGunItem) {
+                this.setItemSlotAndDropWhenKilled(EquipmentSlot.MAINHAND, stack);
+                return;
+            }
+        }
+        for (int i = 0; i < size; i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (stack.getAttributeModifiers(EquipmentSlot.MAINHAND).containsKey(Attributes.ATTACK_DAMAGE)) {
+                this.setItemSlotAndDropWhenKilled(EquipmentSlot.MAINHAND, stack);
+                return;
+            }
+        }
     }
 
     @Override
@@ -740,6 +773,16 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
     private final LivingEntitySprint tacz$sprint;
 
     private boolean drawn = false;
+
+    private ItemStack tacz$lastGunStack = ItemStack.EMPTY;
+    private long tacz$lastShootCoolDown = Long.MIN_VALUE;
+    private long tacz$lastMeleeCoolDown = Long.MIN_VALUE;
+    private long tacz$lastDrawCoolDown = Long.MIN_VALUE;
+    private boolean tacz$lastIsBolting = false;
+    private ReloadState tacz$lastReloadState = null;
+    private float tacz$lastAimingProgress = Float.NaN;
+    private boolean tacz$lastIsAiming = false;
+    private float tacz$lastSprintTime = Float.NaN;
     
     public void draw(Supplier<ItemStack> gunItemSupplier) {
         this.tacz$draw.draw(gunItemSupplier);
@@ -862,45 +905,71 @@ public abstract class AbstractScavEntity extends PathfinderMob implements SmartB
         }
     }
     private void onTickServerSide() {
-        if (!this.level().isClientSide()) {
-            if(this.getMainHandItem().getItem() instanceof ModernKineticGunItem gun) {
-                if(!drawn) {
-                    this.draw(this::getMainHandItem);
-                }
-                ItemStack gunItem = this.getMainHandItem();
-                ResourceLocation gunId = gun.getGunId(gunItem);
-                IGun iGun = IGun.getIGunOrNull(gunItem);
-                LivingEntity shooter = this;
-                if (iGun != null) {
-                    Optional<CommonGunIndex> gunIndexOptional = TimelessAPI.getCommonGunIndex(gunId);
-                    if (!gunIndexOptional.isEmpty()) {
-                        CommonGunIndex gunIndex = (CommonGunIndex) gunIndexOptional.get();
-                        BulletData bulletData = gunIndex.getBulletData();
-                        GunData gunData = gunIndex.getGunData();
-                        AttachmentCacheProperty property = new AttachmentCacheProperty();
-                        property.eval(this.getMainHandItem(), gunData);
-                        updateCacheProperty(property);
-                    }
-                }
-
+        if (this.level().isClientSide()) {
+            return;
+        }
+        ItemStack gunItem = this.getMainHandItem();
+        if (gunItem.getItem() instanceof ModernKineticGunItem gun) {
+            if (!drawn) {
+                this.draw(this::getMainHandItem);
             }
-            this.bolt();
-            ReloadState reloadState = this.tacz$reload.tickReloadState();
-            this.tacz$aim.tickAimingProgress();
-            this.tacz$aim.tickSprint();
-            this.tacz$crawl.tickCrawling();
-            this.tacz$bolt.tickBolt();
-            this.tacz$melee.scheduleTickMelee();
-            this.tacz$speed.updateSpeedModifier();
-            this.tacz$shooter.setSprinting(this.getProcessedSprintStatus(this.tacz$shooter.isSprinting()));
-            ModSyncedEntityData.SHOOT_COOL_DOWN_KEY.setValue(this.tacz$shooter, this.tacz$shoot.getShootCoolDown());
-            ModSyncedEntityData.MELEE_COOL_DOWN_KEY.setValue(this.tacz$shooter, this.tacz$melee.getMeleeCoolDown());
-            ModSyncedEntityData.DRAW_COOL_DOWN_KEY.setValue(this.tacz$shooter, this.tacz$draw.getDrawCoolDown());
+            if (gunItem != tacz$lastGunStack || getCacheProperty() == null) {
+                tacz$lastGunStack = gunItem;
+                ResourceLocation gunId = gun.getGunId(gunItem);
+                Optional<CommonGunIndex> gunIndexOptional = TimelessAPI.getCommonGunIndex(gunId);
+                if (gunIndexOptional.isPresent()) {
+                    AttachmentCacheProperty property = new AttachmentCacheProperty();
+                    property.eval(gunItem, gunIndexOptional.get().getGunData());
+                    updateCacheProperty(property);
+                }
+            }
+        } else if (tacz$lastGunStack != ItemStack.EMPTY) {
+            tacz$lastGunStack = ItemStack.EMPTY;
+        }
+        this.bolt();
+        ReloadState reloadState = this.tacz$reload.tickReloadState();
+        this.tacz$aim.tickAimingProgress();
+        this.tacz$aim.tickSprint();
+        this.tacz$crawl.tickCrawling();
+        this.tacz$bolt.tickBolt();
+        this.tacz$melee.scheduleTickMelee();
+        this.tacz$speed.updateSpeedModifier();
+        this.tacz$shooter.setSprinting(this.getProcessedSprintStatus(this.tacz$shooter.isSprinting()));
+
+        long shootCd = this.tacz$shoot.getShootCoolDown();
+        if (shootCd != tacz$lastShootCoolDown) {
+            ModSyncedEntityData.SHOOT_COOL_DOWN_KEY.setValue(this.tacz$shooter, shootCd);
+            tacz$lastShootCoolDown = shootCd;
+        }
+        long meleeCd = this.tacz$melee.getMeleeCoolDown();
+        if (meleeCd != tacz$lastMeleeCoolDown) {
+            ModSyncedEntityData.MELEE_COOL_DOWN_KEY.setValue(this.tacz$shooter, meleeCd);
+            tacz$lastMeleeCoolDown = meleeCd;
+        }
+        long drawCd = this.tacz$draw.getDrawCoolDown();
+        if (drawCd != tacz$lastDrawCoolDown) {
+            ModSyncedEntityData.DRAW_COOL_DOWN_KEY.setValue(this.tacz$shooter, drawCd);
+            tacz$lastDrawCoolDown = drawCd;
+        }
+        if (this.tacz$data.isBolting != tacz$lastIsBolting) {
             ModSyncedEntityData.IS_BOLTING_KEY.setValue(this.tacz$shooter, this.tacz$data.isBolting);
+            tacz$lastIsBolting = this.tacz$data.isBolting;
+        }
+        if (reloadState != tacz$lastReloadState) {
             ModSyncedEntityData.RELOAD_STATE_KEY.setValue(this.tacz$shooter, reloadState);
+            tacz$lastReloadState = reloadState;
+        }
+        if (Float.floatToRawIntBits(this.tacz$data.aimingProgress) != Float.floatToRawIntBits(tacz$lastAimingProgress)) {
             ModSyncedEntityData.AIMING_PROGRESS_KEY.setValue(this.tacz$shooter, this.tacz$data.aimingProgress);
+            tacz$lastAimingProgress = this.tacz$data.aimingProgress;
+        }
+        if (this.tacz$data.isAiming != tacz$lastIsAiming) {
             ModSyncedEntityData.IS_AIMING_KEY.setValue(this.tacz$shooter, this.tacz$data.isAiming);
+            tacz$lastIsAiming = this.tacz$data.isAiming;
+        }
+        if (Float.floatToRawIntBits(this.tacz$data.sprintTimeS) != Float.floatToRawIntBits(tacz$lastSprintTime)) {
             ModSyncedEntityData.SPRINT_TIME_KEY.setValue(this.tacz$shooter, this.tacz$data.sprintTimeS);
+            tacz$lastSprintTime = this.tacz$data.sprintTimeS;
         }
     }
 }
