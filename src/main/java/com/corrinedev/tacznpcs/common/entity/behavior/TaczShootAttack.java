@@ -53,7 +53,7 @@ public class TaczShootAttack<E extends LivingEntity & SmartBrainOwner<E>> extend
         if (tgt == null) return;
 
         if (BehaviorUtils.entityIsVisible(owner.getBrain(), tgt) && owner.hasLineOfSight(tgt)) {
-            owner.lookAt(EntityAnchorArgument.Anchor.EYES, tgt.getPosition(1f));
+            owner.lookAt(EntityAnchorArgument.Anchor.EYES, tgt.getEyePosition(1f));
             BehaviorUtils.lookAtEntity(owner, tgt);
 
             if (owner.getMainHandItem().getItem() instanceof ModernKineticGunItem) {
